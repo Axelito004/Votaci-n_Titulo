@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Votos</title>
+    <link rel="icon" type="image/png" href="../Recursos/favicon_io/favicon-32x32.png">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            background-color: #f4f4f9; 
+            color: #333; 
+            padding: 20px; 
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 { color: #0984e3; }
+
+        /* Estilos del Panel de Resumen */
+        .panel-resumen {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .panel-resumen h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #555;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .tarjetas-grid {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .tarjeta-stat {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 5px solid #0984e3;
+            text-align: center;
+        }
+
+        .tarjeta-stat.total {
+            border-left-color: #28a745;
+        }
+
+        .tarjeta-stat .numero {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0984e3;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .tarjeta-stat.total .numero {
+            color: #28a745;
+        }
+
+        /* Estilos de la Tabla */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: white; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td { 
+            padding: 12px 15px; 
+            border-bottom: 1px solid #ddd; 
+            text-align: left; 
+        }
+        th { 
+            background-color: #0984e3;
+            color: white; 
+        }
+        tr:hover { background-color: #f1f7ff; }
+        tr:last-child td { border-bottom: none; }
+        
+        .badge-opcion {
+            background: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #334155;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Auditoría de Votos y Recomendaciones</h1>
+
+    <div class="panel-resumen">
+        <h2>Resumen en Tiempo Real</h2>
+        <div class="tarjetas-grid" id="contenedor-stats">
+            <div style="width: 100%; text-align: center; color: #666;">Calculando votos...</div>
+        </div>
+    </div>
+
+    <table id="tabla-votos">
+        <thead>
+            <tr>
+                <th>Fecha y Hora</th>
+                <th>Nombre del Votante</th>
+                <th>Opción Votada</th>
+                <th>Recomendación / Comentario</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="4">Cargando datos desde la base de datos...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        // --- USA LAS MISMAS CREDENCIALES DE SUPABASE AQUÍ ---
+        const supabaseUrl = 'https://fjccqnigwibgyxqdkabn.supabase.co';
+        const supabaseKey = 'sb_publishable_KUxobVlWz105Esh9TEvdPQ_8bvdZcLk';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function cargarDatos() {
+            const { data, error } = await supabaseClient
+                .from('votos_titulo')
+                .select('*')
+                .order('fecha', { ascending: false });
+
+            const tbody = document.querySelector('#tabla-votos tbody');
+            const contenedorStats = document.getElementById('contenedor-stats');
+            
+            tbody.innerHTML = '';
+
+            if (error) {
+                tbody.innerHTML = `<tr><td colspan="4" style="color:red;">Error cargando datos: ${error.message}</td></tr>`;
+                contenedorStats.innerHTML = `<div style="color:red;">Error al calcular estadísticas.</div>`;
+                return;
+            }
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Aún no hay votos registrados.</td></tr>';
+                contenedorStats.innerHTML = `<div style="width: 100%; text-align: center;">No hay votos para contar.</div>`;
+                return;
+            }
+
+            // Variables para el conteo automático
+            let conteo = { 1: 0, 2: 0, 3: 0 };
+            let totalVotos = data.length;
+
+            // Llenar la tabla y contar al mismo tiempo
+            data.forEach(voto => {
+                // Sumar al contador
+                if(conteo[voto.opcion_elegida] !== undefined) {
+                    conteo[voto.opcion_elegida]++;
+                }
+
+                // Formatear fecha
+                const fechaLocal = new Date(voto.fecha).toLocaleString('es-VE', { 
+                    year: 'numeric', month: '2-digit', day: '2-digit', 
+                    hour: '2-digit', minute:'2-digit' 
+                });
+
+                // Crear fila
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-size: 0.9em; color: #555;">${fechaLocal}</td>
+                        <td><strong>${voto.nombre_votante}</strong></td>
+                        <td><span class="badge-opcion">Opción ${voto.opcion_elegida}</span></td>
+                        <td>${voto.recomendacion ? voto.recomendacion : '<em style="color: #aaa;">Sin comentarios</em>'}</td>
+                    </tr>
+                `;
+            });
+
+            // Actualizar el Panel de Resumen con los totales
+            contenedorStats.innerHTML = `
+                <div class="tarjeta-stat">
+                    Opción 1
+                    <span class="numero">${conteo[1]}</span>
+                </div>
+                <div class="tarjeta-stat">
+                    Opción 2
+                    <span class="numero">${conteo[2]}</span>
+                </div>
+                <div class="tarjeta-stat">
+                    Opción 3
+                    <span class="numero">${conteo[3]}</span>
+                </div>
+                <div class="tarjeta-stat total">
+                    Total Votos
+                    <span class="numero">${totalVotos}</span>
+                </div>
+            `;
+        }
+
+        // Ejecutar al cargar la página
+        cargarDatos();
+    </script>
+</body>
+</html>
